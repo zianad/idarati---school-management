@@ -1,6 +1,3 @@
-
-
-
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, useNavigate, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
@@ -47,7 +44,7 @@ const getInitialSeedData = (): School[] => {
                 {id: 'sub2', name: 'العربية', fee: 200, classroom: '102', levelId: 'l1', color: '#bbf7d0'},
                 {id: 'sub3', name: 'الفرنسية', fee: 220, classroom: '101', levelId: 'l1', color: '#fecaca'}
             ],
-            students: [{ id: 's1', name: 'أحمد علي', parentPhone: '0555111222', levelId: 'l1', groupIds: ['g1'], subjectIds: ['sub1', 'sub2'], courseIds: ['c1'], registrationDate: new Date().toISOString(), schoolName: 'مدرسة ابتدائية', hasTransportation: true }],
+            students: [{ id: 's1', name: 'أحمد علي', parentPhone: '0555111222', levelId: 'l1', groupIds: ['g1'], subjectIds: ['sub1', 'sub2', 'sub3'], courseIds: ['c1'], registrationDate: new Date().toISOString(), schoolName: 'مدرسة ابتدائية', hasTransportation: true }],
             teachers: [{ id: 't1', name: 'الأستاذ خالد', subjects: ['sub1', 'sub3'], levelIds: ['l1'], courseIds: ['c1'], phone: '0555333444', salary: { type: 'fixed', value: 5000 } }, { id: 't2', name: 'الأستاذة فاطمة', subjects: ['sub2'], levelIds: ['l1'], phone: '0555555555', salary: { type: 'percentage', value: 50 } }],
             staff: [{id: 'staff1', name: 'سائق الحافلة', role: 'driver', salary: 3000}],
             courses: [{ id: 'c1', name: 'نادي البرمجة', fee: 200, teacherIds: ['t1'], color: '#f5d0fe' }],
@@ -132,7 +129,6 @@ const AppLogic: React.FC = () => {
                     attendance: school.attendance || [],
                     staff: school.staff || [],
                     transportationFee: school.transportationFee || 0,
-                    // FIX: Address TypeScript error for `cafeteriaFee` during data migration by casting `school` to `any` to allow access to the potentially existing old property.
                     cafeteriaDailyFee: school.cafeteriaDailyFee ?? (school as any).cafeteriaFee ?? 0,
                     cafeteriaPayments: school.cafeteriaPayments || [],
                     cafeteriaUsage: school.cafeteriaUsage || [],
@@ -309,24 +305,46 @@ const AppLogic: React.FC = () => {
         await modifySchool(schoolId, school => ({ ...school, ...codes }));
     }
 
-    const addStudent = async (schoolId: string, studentData: Omit<Student, 'id' | 'registrationDate'>) => {
-        const newStudent: Student = { ...studentData, id: generateId(), registrationDate: new Date().toISOString() };
-        await modifySchool(schoolId, school => ({ ...school, students: [...school.students, newStudent] }));
+    const addStudent = async (schoolId: string, studentData: Omit<Student, 'id' | 'registrationDate' | 'subjectIds'>) => {
+        await modifySchool(schoolId, school => {
+            const subjectsForLevel = school.subjects.filter(s => s.levelId === studentData.levelId).map(s => s.id);
+            const newStudent: Student = { 
+                ...studentData, 
+                subjectIds: subjectsForLevel,
+                id: generateId(), 
+                registrationDate: new Date().toISOString()
+            };
+            return { ...school, students: [...school.students, newStudent] };
+        });
     };
     
-    const addStudentsBulk = async (schoolId: string, students: Omit<Student, 'id' | 'registrationDate'>[]) => {
+    const addStudentsBulk = async (schoolId: string, students: Omit<Student, 'id' | 'registrationDate' | 'subjectIds'>[]) => {
         await modifySchool(schoolId, school => {
-            const newStudentsWithIds = students.map(s => ({
-                ...s,
-                id: generateId(),
-                registrationDate: new Date().toISOString()
-            }));
+            const newStudentsWithIds = students.map(s => {
+                const subjectsForLevel = school.subjects.filter(sub => sub.levelId === s.levelId).map(sub => sub.id);
+                return {
+                    ...s,
+                    id: generateId(),
+                    registrationDate: new Date().toISOString(),
+                    subjectIds: subjectsForLevel,
+                } as Student;
+            });
             return { ...school, students: [...school.students, ...newStudentsWithIds] };
         });
     };
 
     const updateStudent = async (schoolId: string, student: Student) => {
-        await modifySchool(schoolId, s => ({ ...s, students: s.students.map(st => st.id === student.id ? student : st) }));
+        await modifySchool(schoolId, s => {
+            const originalStudent = s.students.find(st => st.id === student.id);
+            let updatedStudent = { ...student };
+
+            if (originalStudent && originalStudent.levelId !== student.levelId) {
+                const subjectsForNewLevel = s.subjects.filter(sub => sub.levelId === student.levelId).map(sub => sub.id);
+                updatedStudent.subjectIds = subjectsForNewLevel;
+            }
+
+            return { ...s, students: s.students.map(st => st.id === student.id ? updatedStudent : st) };
+        });
     };
 
     const deleteStudent = async (schoolId: string, studentId: string) => {

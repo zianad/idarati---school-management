@@ -1,5 +1,3 @@
-
-
 import { TranslationKey } from '../i18n/index.ts';
 
 export enum UserRole {
@@ -178,8 +176,8 @@ export interface AppContextType {
   // School-specific functions
   findSchool: (schoolId: string) => School | undefined;
   updateSchoolFees: (schoolId: string, fees: { transportationFee: number; cafeteriaDailyFee: number; }) => Promise<void>;
-  addStudent: (schoolId: string, student: Omit<Student, 'id' | 'registrationDate'>) => Promise<void>;
-  addStudentsBulk: (schoolId: string, students: Omit<Student, 'id' | 'registrationDate'>[]) => Promise<void>;
+  addStudent: (schoolId: string, student: Omit<Student, 'id' | 'registrationDate' | 'subjectIds'>) => Promise<void>;
+  addStudentsBulk: (schoolId: string, students: Omit<Student, 'id' | 'registrationDate' | 'subjectIds'>[]) => Promise<void>;
   updateStudent: (schoolId: string, student: Student) => Promise<void>;
   deleteStudent: (schoolId: string, studentId: string) => Promise<void>;
   addTeacher: (schoolId: string, teacher: Omit<Teacher, 'id'>) => Promise<void>;

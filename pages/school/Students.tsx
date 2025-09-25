@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -17,7 +16,7 @@ const Students: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-    const [formData, setFormData] = useState({ name: '', schoolName: '', parentPhone: '', levelId: '', groupIds: [] as string[], subjectIds: [] as string[], hasTransportation: false });
+    const [formData, setFormData] = useState({ name: '', schoolName: '', parentPhone: '', levelId: '', groupIds: [] as string[], hasTransportation: false });
     const [searchTerm, setSearchTerm] = useState('');
 
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -40,9 +39,9 @@ const Students: React.FC = () => {
     const handleOpenModal = (student: Student | null = null) => {
         setEditingStudent(student);
         if (student) {
-            setFormData({ name: student.name, schoolName: student.schoolName || '', parentPhone: student.parentPhone, levelId: student.levelId, groupIds: student.groupIds, subjectIds: student.subjectIds || [], hasTransportation: !!student.hasTransportation });
+            setFormData({ name: student.name, schoolName: student.schoolName || '', parentPhone: student.parentPhone, levelId: student.levelId, groupIds: student.groupIds, hasTransportation: !!student.hasTransportation });
         } else {
-            setFormData({ name: '', schoolName: '', parentPhone: '', levelId: school?.levels[0]?.id || '', groupIds: [], subjectIds: [], hasTransportation: false });
+            setFormData({ name: '', schoolName: '', parentPhone: '', levelId: school?.levels[0]?.id || '', groupIds: [], hasTransportation: false });
         }
         setIsModalOpen(true);
     };
@@ -56,14 +55,13 @@ const Students: React.FC = () => {
         e.preventDefault();
         if (!currentUser?.schoolId) return;
 
-        const { name, parentPhone, levelId, groupIds, subjectIds, schoolName, hasTransportation } = formData;
+        const { name, parentPhone, levelId, groupIds, schoolName, hasTransportation } = formData;
         
         const studentData = {
             name,
             parentPhone,
             levelId,
             groupIds,
-            subjectIds,
             hasTransportation,
             ...(schoolName && { schoolName })
         };
@@ -92,15 +90,6 @@ const Students: React.FC = () => {
             groupIds: prev.groupIds.includes(groupId)
                 ? prev.groupIds.filter(id => id !== groupId)
                 : [...prev.groupIds, groupId]
-        }));
-    };
-
-    const handleSubjectChange = (subjectId: string) => {
-        setFormData(prev => ({
-            ...prev,
-            subjectIds: prev.subjectIds.includes(subjectId)
-                ? prev.subjectIds.filter(id => id !== subjectId)
-                : [...prev.subjectIds, subjectId]
         }));
     };
 
@@ -288,22 +277,6 @@ const Students: React.FC = () => {
                             </div>
                         </div>
                     )}
-                     <div>
-                        <label className={labelClass}>{t('subjects')}</label>
-                        <div className="mt-2 grid grid-cols-2 gap-2 p-3 border dark:border-gray-600 rounded-lg max-h-32 overflow-y-auto bg-gray-50 dark:bg-gray-700/50">
-                            {school.subjects.map(subject => (
-                                <label key={subject.id} className="flex items-center space-x-3 rtl:space-x-reverse cursor-pointer p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.subjectIds.includes(subject.id)}
-                                        onChange={() => handleSubjectChange(subject.id)}
-                                        className="form-checkbox h-5 w-5 rounded text-blue-600 focus:ring-blue-500 bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                                    />
-                                     <span className="text-gray-800 dark:text-gray-200">{subject.name}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
                     <div>
                         <label className={labelClass}>{t('services')}</label>
                         <div className="mt-2 space-y-2 p-3 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50">

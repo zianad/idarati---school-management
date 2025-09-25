@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -80,23 +81,23 @@ const Teachers: React.FC = () => {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser?.schoolId) return;
 
         if (editingTeacher) {
-            updateTeacher(currentUser.schoolId, { ...editingTeacher, ...formData });
+            await updateTeacher(currentUser.schoolId, { ...editingTeacher, ...formData });
              showToast(t('editSuccess'), 'success');
         } else {
-            addTeacher(currentUser.schoolId, formData);
+            await addTeacher(currentUser.schoolId, formData);
              showToast(t('addSuccess'), 'success');
         }
         handleCloseModal();
     };
 
-    const handleDelete = (teacherId: string) => {
+    const handleDelete = async (teacherId: string) => {
         if(window.confirm(t('confirmDelete')) && currentUser?.schoolId) {
-            deleteTeacher(currentUser.schoolId, teacherId);
+            await deleteTeacher(currentUser.schoolId, teacherId);
             showToast(t('deleteSuccess'), 'info');
         }
     }

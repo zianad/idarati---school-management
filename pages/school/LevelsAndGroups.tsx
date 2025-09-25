@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -22,20 +23,20 @@ const LevelsAndGroups: React.FC = () => {
 
     const isOwner = currentUser?.role === UserRole.SchoolOwner;
 
-    const handleAddLevel = (e: React.FormEvent) => {
+    const handleAddLevel = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId && levelName) {
-            addLevel(currentUser.schoolId, { name: levelName });
+            await addLevel(currentUser.schoolId, { name: levelName });
             setLevelName('');
             setOpenModal(null);
             showToast(t('addSuccess'), 'success');
         }
     };
     
-    const handleAddGroup = (e: React.FormEvent) => {
+    const handleAddGroup = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId && groupName && selectedLevelId) {
-            addGroup(currentUser.schoolId, { name: groupName, levelId: selectedLevelId });
+            await addGroup(currentUser.schoolId, { name: groupName, levelId: selectedLevelId });
             setGroupName('');
             setSelectedLevelId('');
             setOpenModal(null);
@@ -43,9 +44,9 @@ const LevelsAndGroups: React.FC = () => {
         }
     };
 
-    const createDeleteHandler = (deleteFunc: (schoolId: string, id: string) => void) => (id: string) => {
+    const createDeleteHandler = (deleteFunc: (schoolId: string, id: string) => Promise<void>) => async (id: string) => {
         if (window.confirm(t('confirmDelete')) && currentUser?.schoolId) {
-            deleteFunc(currentUser.schoolId, id);
+            await deleteFunc(currentUser.schoolId, id);
             showToast(t('deleteSuccess'), 'info');
         }
     };

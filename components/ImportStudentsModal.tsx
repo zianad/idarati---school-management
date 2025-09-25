@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../hooks/useLanguage.ts';
@@ -182,9 +183,9 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({ isOpen, onClo
     reader.readAsArrayBuffer(file);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (successfulImports.length > 0 && currentUser?.schoolId) {
-        addStudentsBulk(currentUser.schoolId, successfulImports);
+        await addStudentsBulk(currentUser.schoolId, successfulImports);
         handleClose();
     }
   }

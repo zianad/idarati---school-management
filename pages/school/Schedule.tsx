@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -272,9 +273,9 @@ const Schedule: React.FC = () => {
         return school.students.filter(s => s.groupIds.includes(attendanceModalState.session!.groupId));
     }, [school, attendanceModalState.session]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (school) {
-            updateSchedule(school.id, sessions);
+            await updateSchedule(school.id, sessions);
             setIsDirty(false);
             showToast(t('scheduleUpdated'), 'success');
         }
@@ -376,7 +377,7 @@ const Schedule: React.FC = () => {
         });
     };
     
-    const handleSessionFormSubmit = (e: React.FormEvent) => {
+    const handleSessionFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const { entityId, day, timeSlot, classroom, entityType, duration, color, groupId } = newSessionData;
         if (!school || !entityId || !day || !timeSlot || !classroom || !groupId) {
@@ -388,12 +389,12 @@ const Schedule: React.FC = () => {
         if (entityType === 'subject') {
             const subject = school.subjects.find(s => s.id === entityId);
             if (subject && subject.color !== color) {
-                updateSubject(school.id, { ...subject, color });
+                await updateSubject(school.id, { ...subject, color });
             }
         } else { // 'course'
             const course = school.courses.find(c => c.id === entityId);
             if (course && course.color !== color) {
-                updateCourse(school.id, { ...course, color });
+                await updateCourse(school.id, { ...course, color });
             }
         }
         
@@ -550,7 +551,7 @@ const Schedule: React.FC = () => {
         setAttendanceData(newAttendanceData);
     };
 
-    const handleSaveAttendance = () => {
+    const handleSaveAttendance = async () => {
         if (!school || !attendanceModalState.session) return;
         
         const records: Omit<Attendance, 'id'>[] = [];
@@ -564,7 +565,7 @@ const Schedule: React.FC = () => {
         });
 
         if (records.length > 0) {
-            recordAttendance(school.id, records);
+            await recordAttendance(school.id, records);
             showToast(t('attendanceRecordedSuccess'), 'success');
         }
 

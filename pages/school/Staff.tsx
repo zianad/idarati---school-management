@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -36,7 +37,7 @@ const Staff: React.FC = () => {
         setEditingStaff(null);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser?.schoolId) return;
 
@@ -46,18 +47,18 @@ const Staff: React.FC = () => {
         }
 
         if (editingStaff) {
-            updateStaffMember(currentUser.schoolId, { ...editingStaff, ...formData });
+            await updateStaffMember(currentUser.schoolId, { ...editingStaff, ...formData });
              showToast(t('editSuccess'), 'success');
         } else {
-            addStaffMember(currentUser.schoolId, formData);
+            await addStaffMember(currentUser.schoolId, formData);
              showToast(t('addSuccess'), 'success');
         }
         handleCloseModal();
     };
 
-    const handleDelete = (staffId: string) => {
+    const handleDelete = async (staffId: string) => {
         if(window.confirm(t('confirmDelete')) && currentUser?.schoolId) {
-            deleteStaffMember(currentUser.schoolId, staffId);
+            await deleteStaffMember(currentUser.schoolId, staffId);
             showToast(t('deleteSuccess'), 'info');
         }
     }

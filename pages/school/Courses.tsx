@@ -121,7 +121,7 @@ const SubjectsPage: React.FC = () => {
         }));
     };
     
-    const handleSubjectSubmit = (e: React.FormEvent) => {
+    const handleSubjectSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser?.schoolId || !subjectFormData.name || !subjectFormData.classroom || !subjectFormData.levelId) return;
         
@@ -134,11 +134,11 @@ const SubjectsPage: React.FC = () => {
         };
 
         if (modalState?.mode === 'edit' && subjectFormData.id) {
-            updateSubject(currentUser.schoolId, { id: subjectFormData.id, ...subjectData });
+            await updateSubject(currentUser.schoolId, { id: subjectFormData.id, ...subjectData });
             showToast(t('editSuccess'), 'success');
         } else {
             const sessionData = subjectFormData.sessions.filter(s => s.day && s.timeSlot && s.classroom && s.groupId);
-            addSubject(currentUser.schoolId, subjectData, sessionData.length > 0 ? sessionData : undefined);
+            await addSubject(currentUser.schoolId, subjectData, sessionData.length > 0 ? sessionData : undefined);
             showToast(t('addSuccess'), 'success');
         }
         setModalState(null);
@@ -166,9 +166,9 @@ const SubjectsPage: React.FC = () => {
         }));
     }
 
-    const handleDeleteSubject = (id: string) => {
+    const handleDeleteSubject = async (id: string) => {
         if (window.confirm(t('confirmDelete')) && currentUser?.schoolId) {
-            deleteSubject(currentUser.schoolId, id);
+            await deleteSubject(currentUser.schoolId, id);
             showToast(t('deleteSuccess'), 'info');
         }
     };

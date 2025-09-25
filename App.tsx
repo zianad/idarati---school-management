@@ -1,11 +1,13 @@
 
 
+
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, useNavigate, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { LanguageProvider } from './contexts/LanguageContext.tsx';
 import { ToastProvider } from './contexts/ToastContext.tsx';
 import { AppContextType, School, User, UserRole, Student, Teacher, StaffMember, Level, Group, Course, Expense, Payment, Subject, ScheduledSession, Attendance, CafeteriaPayment, CafeteriaUsage } from './types/index.ts';
+import * as db from './lib/db.ts';
 
 import LoginPage from './pages/LoginPage.tsx';
 import SuperAdminDashboard from './pages/SuperAdminDashboard.tsx';
@@ -28,31 +30,7 @@ import { TranslationKey } from './i18n/index.ts';
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // --- Initial Data ---
-const getInitialSchools = (): School[] => {
-    const savedSchools = localStorage.getItem('schools');
-    if (savedSchools) {
-        try {
-            const parsed = JSON.parse(savedSchools);
-            if (Array.isArray(parsed)) {
-                // Ensure all schools have necessary properties
-                return parsed.map(school => ({ 
-                    ...school, 
-                    isActive: school.isActive !== undefined ? school.isActive : true,
-                    scheduledSessions: school.scheduledSessions || [],
-                    attendance: school.attendance || [],
-                    staff: school.staff || [],
-                    transportationFee: school.transportationFee || 0,
-                    cafeteriaDailyFee: school.cafeteriaDailyFee ?? school.cafeteriaFee ?? 0, // Migration from old fee
-                    cafeteriaPayments: school.cafeteriaPayments || [],
-                    cafeteriaUsage: school.cafeteriaUsage || [],
-                    trialEndDate: school.trialEndDate 
-                }));
-            }
-        } catch (e) {
-            console.error("Failed to parse schools from localStorage", e);
-        }
-    }
-    // Seed with initial data if nothing is in localStorage or parsing fails
+const getInitialSeedData = (): School[] => {
     return [
         {
             id: 'school_1',
@@ -99,7 +77,8 @@ const PrivateSchoolLayout = () => {
 
 
 const AppLogic: React.FC = () => {
-    const [schools, setSchools] = useState<School[]>(getInitialSchools);
+    const [schools, setSchools] = useState<School[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
         const savedUser = localStorage.getItem('currentUser');
         return savedUser ? JSON.parse(savedUser) : null;
@@ -111,10 +90,80 @@ const AppLogic: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Persist state to localStorage
+    // Load schools from IndexedDB on initial mount
     useEffect(() => {
-        localStorage.setItem('schools', JSON.stringify(schools));
-    }, [schools]);
+        const loadData = async () => {
+            try {
+                let schoolsFromDB = await db.getAllSchools();
+
+                // If DB is empty, try to migrate from localStorage or seed initial data
+                if (schoolsFromDB.length === 0) {
+                    const savedSchools = localStorage.getItem('schools');
+                    if (savedSchools) {
+                        try {
+                           const parsed = JSON.parse(savedSchools);
+                           if (Array.isArray(parsed) && parsed.length > 0) {
+                               await db.bulkPutSchools(parsed);
+                               schoolsFromDB = parsed;
+                               console.log("Migrated data from localStorage to IndexedDB.");
+                               localStorage.removeItem('schools'); 
+                           } else {
+                               const initialData = getInitialSeedData();
+                               await db.bulkPutSchools(initialData);
+                               schoolsFromDB = initialData;
+                           }
+                        } catch(e) {
+                             const initialData = getInitialSeedData();
+                             await db.bulkPutSchools(initialData);
+                             schoolsFromDB = initialData;
+                        }
+                    } else {
+                        const initialData = getInitialSeedData();
+                        await db.bulkPutSchools(initialData);
+                        schoolsFromDB = initialData;
+                    }
+                }
+                
+                // Data migration for schema changes
+                const migratedSchools = schoolsFromDB.map(school => ({ 
+                    ...school, 
+                    isActive: school.isActive !== undefined ? school.isActive : true,
+                    scheduledSessions: school.scheduledSessions || [],
+                    attendance: school.attendance || [],
+                    staff: school.staff || [],
+                    transportationFee: school.transportationFee || 0,
+                    // FIX: Address TypeScript error for `cafeteriaFee` during data migration by casting `school` to `any` to allow access to the potentially existing old property.
+                    cafeteriaDailyFee: school.cafeteriaDailyFee ?? (school as any).cafeteriaFee ?? 0,
+                    cafeteriaPayments: school.cafeteriaPayments || [],
+                    cafeteriaUsage: school.cafeteriaUsage || [],
+                    trialEndDate: school.trialEndDate 
+                }));
+
+                // Check for expired trials
+                const today = new Date().toISOString().slice(0, 10);
+                let schoolsUpdated = false;
+                const finalSchools = migratedSchools.map(school => {
+                    if (school.isActive && school.trialEndDate && school.trialEndDate < today) {
+                        schoolsUpdated = true;
+                        return { ...school, isActive: false };
+                    }
+                    return school;
+                });
+            
+                if (schoolsUpdated) {
+                    await db.bulkPutSchools(finalSchools);
+                }
+                setSchools(finalSchools);
+
+            } catch (error) {
+                console.error("Failed to load schools from DB", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     useEffect(() => {
         if (currentUser) {
@@ -131,41 +180,24 @@ const AppLogic: React.FC = () => {
             localStorage.removeItem('originalUser');
         }
     }, [originalUser]);
-    
-    // Check for expired trials on initial load
-    useEffect(() => {
-        const today = new Date().toISOString().slice(0, 10);
-        let schoolsUpdated = false;
-    
-        const updatedSchools = schools.map(school => {
-            if (school.isActive && school.trialEndDate && school.trialEndDate < today) {
-                schoolsUpdated = true;
-                return { ...school, isActive: false };
-            }
-            return school;
-        });
-    
-        if (schoolsUpdated) {
-            setSchools(updatedSchools);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     // Navigation logic on user change
     useEffect(() => {
-        if (currentUser) {
-            if (currentUser.role === UserRole.SuperAdmin && !originalUser) {
-                navigate('/super-admin');
-            } else if (currentUser.role === UserRole.SchoolOwner || currentUser.role === UserRole.Staff) {
-                if (location.pathname === '/login' || location.pathname === '/super-admin') {
-                   navigate('/');
+        if (!isLoading) {
+            if (currentUser) {
+                if (currentUser.role === UserRole.SuperAdmin && !originalUser) {
+                    navigate('/super-admin');
+                } else if (currentUser.role === UserRole.SchoolOwner || currentUser.role === UserRole.Staff) {
+                    if (location.pathname === '/login' || location.pathname === '/super-admin') {
+                       navigate('/');
+                    }
                 }
+            } else {
+                navigate('/login');
             }
-        } else {
-            navigate('/login');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentUser, originalUser]);
+    }, [currentUser, originalUser, isLoading]);
 
     const login = (code: string): { success: boolean; messageKey?: TranslationKey } => {
         if (code === 'Abzn11241984') {
@@ -211,25 +243,23 @@ const AppLogic: React.FC = () => {
             setOriginalUser(null);
         }
     };
-
-    const updateSchools = (updater: (prevSchools: School[]) => School[]) => {
-        setSchools(updater);
-    };
-
-    const findSchool = useCallback((schoolId: string) => schools.find(s => s.id === schoolId), [schools]);
-
-    // --- State modification functions ---
     
-    const modifySchool = (schoolId: string, modification: (school: School) => School) => {
-        updateSchools(prev => prev.map(s => s.id === schoolId ? modification(s) : s));
+    const findSchool = useCallback((schoolId: string) => schools.find(s => s.id === schoolId), [schools]);
+    
+    const modifySchool = async (schoolId: string, modification: (school: School) => School) => {
+        const schoolToModify = schools.find(s => s.id === schoolId);
+        if (!schoolToModify) return;
+        const modifiedSchool = modification(schoolToModify);
+        await db.putSchool(modifiedSchool);
+        setSchools(prev => prev.map(s => s.id === schoolId ? modifiedSchool : s));
     };
 
-    const addSchool = (schoolDetails: { name: string; logo: string; ownerCode: string; staffCode: string; trialDays: number; }) => {
+    const addSchool = async (schoolDetails: { name: string; logo: string; ownerCode: string; staffCode: string; trialDays: number; }) => {
         let trialEndDate: string | undefined = undefined;
         if (schoolDetails.trialDays > 0) {
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + schoolDetails.trialDays);
-            trialEndDate = endDate.toISOString().slice(0, 10); // YYYY-MM-DD
+            trialEndDate = endDate.toISOString().slice(0, 10);
         }
 
         const newSchool: School = {
@@ -246,184 +276,170 @@ const AppLogic: React.FC = () => {
             cafeteriaPayments: [],
             cafeteriaUsage: []
         };
-        updateSchools(prev => [...prev, newSchool]);
+        await db.putSchool(newSchool);
+        setSchools(prev => [...prev, newSchool]);
     };
 
-    const deleteSchool = (schoolId: string) => {
-        updateSchools(prev => prev.filter(s => s.id !== schoolId));
+    const deleteSchool = async (schoolId: string) => {
+        await db.deleteSchoolDB(schoolId);
+        setSchools(prev => prev.filter(s => s.id !== schoolId));
     };
     
-    const toggleSchoolStatus = (schoolId: string) => {
-        modifySchool(schoolId, school => ({ ...school, isActive: !school.isActive }));
+    const toggleSchoolStatus = async (schoolId: string) => {
+        await modifySchool(schoolId, school => ({ ...school, isActive: !school.isActive }));
     };
 
-    const activateSchoolPermanently = (schoolId: string) => {
-        modifySchool(schoolId, school => ({
+    const activateSchoolPermanently = async (schoolId: string) => {
+        await modifySchool(schoolId, school => ({
             ...school,
             trialEndDate: undefined,
             isActive: true
         }));
     };
 
-    const updateSchoolDetails = (schoolId: string, details: { name: string; logo: string; }) => {
-        modifySchool(schoolId, school => ({ ...school, ...details }));
+    const updateSchoolDetails = async (schoolId: string, details: { name: string; logo: string; }) => {
+        await modifySchool(schoolId, school => ({ ...school, ...details }));
     }
 
-    const updateSchoolFees = (schoolId: string, fees: { transportationFee: number; cafeteriaDailyFee: number; }) => {
-        modifySchool(schoolId, school => ({ ...school, ...fees }));
+    const updateSchoolFees = async (schoolId: string, fees: { transportationFee: number; cafeteriaDailyFee: number; }) => {
+        await modifySchool(schoolId, school => ({ ...school, ...fees }));
     }
     
-    const updateSchoolCodes = (schoolId: string, codes: { ownerCode: string; staffCode: string; }) => {
-        modifySchool(schoolId, school => ({ ...school, ...codes }));
+    const updateSchoolCodes = async (schoolId: string, codes: { ownerCode: string; staffCode: string; }) => {
+        await modifySchool(schoolId, school => ({ ...school, ...codes }));
     }
 
-    const addStudent = (schoolId: string, studentData: Omit<Student, 'id' | 'registrationDate'>) => {
+    const addStudent = async (schoolId: string, studentData: Omit<Student, 'id' | 'registrationDate'>) => {
         const newStudent: Student = { ...studentData, id: generateId(), registrationDate: new Date().toISOString() };
-        modifySchool(schoolId, school => ({ ...school, students: [...school.students, newStudent] }));
+        await modifySchool(schoolId, school => ({ ...school, students: [...school.students, newStudent] }));
     };
     
-    const addStudentsBulk = (schoolId: string, students: Omit<Student, 'id' | 'registrationDate'>[]) => {
-        modifySchool(schoolId, school => {
+    const addStudentsBulk = async (schoolId: string, students: Omit<Student, 'id' | 'registrationDate'>[]) => {
+        await modifySchool(schoolId, school => {
             const newStudentsWithIds = students.map(s => ({
                 ...s,
                 id: generateId(),
                 registrationDate: new Date().toISOString()
             }));
-            
-            return {
-                ...school,
-                students: [...school.students, ...newStudentsWithIds]
-            };
+            return { ...school, students: [...school.students, ...newStudentsWithIds] };
         });
     };
 
-
-    const updateStudent = (schoolId: string, student: Student) => {
-        modifySchool(schoolId, s => ({ ...s, students: s.students.map(st => st.id === student.id ? student : st) }));
+    const updateStudent = async (schoolId: string, student: Student) => {
+        await modifySchool(schoolId, s => ({ ...s, students: s.students.map(st => st.id === student.id ? student : st) }));
     };
 
-    const deleteStudent = (schoolId: string, studentId: string) => {
-        modifySchool(schoolId, s => ({ ...s, students: s.students.filter(st => st.id !== studentId) }));
+    const deleteStudent = async (schoolId: string, studentId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, students: s.students.filter(st => st.id !== studentId) }));
     };
 
-    const addTeacher = (schoolId: string, teacher: Omit<Teacher, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, teachers: [...s.teachers, { ...teacher, id: generateId() }] }));
+    const addTeacher = async (schoolId: string, teacher: Omit<Teacher, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, teachers: [...s.teachers, { ...teacher, id: generateId() }] }));
     };
 
-    const updateTeacher = (schoolId: string, teacher: Teacher) => {
-        modifySchool(schoolId, s => ({ ...s, teachers: s.teachers.map(t => t.id === teacher.id ? teacher : t) }));
+    const updateTeacher = async (schoolId: string, teacher: Teacher) => {
+        await modifySchool(schoolId, s => ({ ...s, teachers: s.teachers.map(t => t.id === teacher.id ? teacher : t) }));
     };
 
-    const deleteTeacher = (schoolId: string, teacherId: string) => {
-        modifySchool(schoolId, s => ({ ...s, teachers: s.teachers.filter(t => t.id !== teacherId) }));
+    const deleteTeacher = async (schoolId: string, teacherId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, teachers: s.teachers.filter(t => t.id !== teacherId) }));
     };
 
-    const addStaffMember = (schoolId: string, staffMember: Omit<StaffMember, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, staff: [...s.staff, { ...staffMember, id: generateId() }] }));
+    const addStaffMember = async (schoolId: string, staffMember: Omit<StaffMember, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, staff: [...s.staff, { ...staffMember, id: generateId() }] }));
     };
 
-    const updateStaffMember = (schoolId: string, staffMember: StaffMember) => {
-        modifySchool(schoolId, s => ({ ...s, staff: s.staff.map(sm => sm.id === staffMember.id ? staffMember : sm) }));
+    const updateStaffMember = async (schoolId: string, staffMember: StaffMember) => {
+        await modifySchool(schoolId, s => ({ ...s, staff: s.staff.map(sm => sm.id === staffMember.id ? staffMember : sm) }));
     };
 
-    const deleteStaffMember = (schoolId: string, staffMemberId: string) => {
-        modifySchool(schoolId, s => ({ ...s, staff: s.staff.filter(sm => sm.id !== staffMemberId) }));
+    const deleteStaffMember = async (schoolId: string, staffMemberId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, staff: s.staff.filter(sm => sm.id !== staffMemberId) }));
     };
 
-
-    const addLevel = (schoolId: string, level: Omit<Level, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, levels: [...s.levels, { ...level, id: generateId() }] }));
+    const addLevel = async (schoolId: string, level: Omit<Level, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, levels: [...s.levels, { ...level, id: generateId() }] }));
     };
     
-    const deleteLevel = (schoolId: string, levelId: string) => {
-        modifySchool(schoolId, s => ({ ...s, levels: s.levels.filter(l => l.id !== levelId) }));
+    const deleteLevel = async (schoolId: string, levelId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, levels: s.levels.filter(l => l.id !== levelId) }));
     };
 
-    const addGroup = (schoolId: string, group: Omit<Group, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, groups: [...s.groups, { ...group, id: generateId() }] }));
+    const addGroup = async (schoolId: string, group: Omit<Group, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, groups: [...s.groups, { ...group, id: generateId() }] }));
     };
     
-    const deleteGroup = (schoolId: string, groupId: string) => {
-        modifySchool(schoolId, s => ({ ...s, groups: s.groups.filter(g => g.id !== groupId) }));
+    const deleteGroup = async (schoolId: string, groupId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, groups: s.groups.filter(g => g.id !== groupId) }));
     };
     
-    const addCourse = (schoolId: string, course: Omit<Course, 'id'>, sessionData?: { day: string; timeSlot: string; classroom: string; duration: number; groupId: string }[]) => {
+    const addCourse = async (schoolId: string, course: Omit<Course, 'id'>, sessionData?: { day: string; timeSlot: string; classroom: string; duration: number; groupId: string }[]) => {
         const newCourse = { ...course, id: generateId() };
-        modifySchool(schoolId, school => {
+        await modifySchool(schoolId, school => {
             const newSessions = [...school.scheduledSessions];
             if (sessionData) {
                 sessionData.forEach(session => {
-                    newSessions.push({
-                        ...session,
-                        id: generateId(),
-                        courseId: newCourse.id,
-                    });
+                    newSessions.push({ ...session, id: generateId(), courseId: newCourse.id });
                 });
             }
             return { ...school, courses: [...school.courses, newCourse], scheduledSessions: newSessions };
         });
     };
     
-    const updateCourse = (schoolId: string, course: Course) => {
-        modifySchool(schoolId, s => ({ ...s, courses: s.courses.map(c => c.id === course.id ? course : c) }));
+    const updateCourse = async (schoolId: string, course: Course) => {
+        await modifySchool(schoolId, s => ({ ...s, courses: s.courses.map(c => c.id === course.id ? course : c) }));
     };
 
-    const deleteCourse = (schoolId: string, courseId: string) => {
-        modifySchool(schoolId, s => ({ ...s, courses: s.courses.filter(c => c.id !== courseId) }));
+    const deleteCourse = async (schoolId: string, courseId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, courses: s.courses.filter(c => c.id !== courseId) }));
     };
     
-    const addSubject = (schoolId: string, subject: Omit<Subject, 'id'>, sessionData?: { day: string; timeSlot: string; classroom: string; duration: number; groupId: string }[]) => {
+    const addSubject = async (schoolId: string, subject: Omit<Subject, 'id'>, sessionData?: { day: string; timeSlot: string; classroom: string; duration: number; groupId: string }[]) => {
         const newSubject = { ...subject, id: generateId() };
-        modifySchool(schoolId, school => {
+        await modifySchool(schoolId, school => {
             const newSessions = [...school.scheduledSessions];
             if (sessionData) {
                 sessionData.forEach(session => {
-                    newSessions.push({
-                        ...session,
-                        id: generateId(),
-                        subjectId: newSubject.id,
-                    });
+                    newSessions.push({ ...session, id: generateId(), subjectId: newSubject.id });
                 });
             }
             return { ...school, subjects: [...school.subjects, newSubject], scheduledSessions: newSessions };
         });
     };
 
-    const updateSubject = (schoolId: string, subject: Subject) => {
-        modifySchool(schoolId, s => ({ ...s, subjects: s.subjects.map(sub => sub.id === subject.id ? subject : sub) }));
+    const updateSubject = async (schoolId: string, subject: Subject) => {
+        await modifySchool(schoolId, s => ({ ...s, subjects: s.subjects.map(sub => sub.id === subject.id ? subject : sub) }));
     };
 
-    const deleteSubject = (schoolId: string, subjectId: string) => {
-        modifySchool(schoolId, s => ({ ...s, subjects: s.subjects.filter(sub => sub.id !== subjectId) }));
+    const deleteSubject = async (schoolId: string, subjectId: string) => {
+        await modifySchool(schoolId, s => ({ ...s, subjects: s.subjects.filter(sub => sub.id !== subjectId) }));
     };
 
-    const addExpense = (schoolId: string, expense: Omit<Expense, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, expenses: [...s.expenses, { ...expense, id: generateId() }] }));
+    const addExpense = async (schoolId: string, expense: Omit<Expense, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, expenses: [...s.expenses, { ...expense, id: generateId() }] }));
     };
     
-    const addPayment = (schoolId: string, payment: Omit<Payment, 'id'>) => {
-        modifySchool(schoolId, s => ({ ...s, payments: [...s.payments, { ...payment, id: generateId() }] }));
+    const addPayment = async (schoolId: string, payment: Omit<Payment, 'id'>) => {
+        await modifySchool(schoolId, s => ({ ...s, payments: [...s.payments, { ...payment, id: generateId() }] }));
     };
 
-    const addCafeteriaPayment = (schoolId: string, paymentData: Omit<CafeteriaPayment, 'id' | 'paymentDate' | 'amount'>) => {
-        modifySchool(schoolId, school => {
+    const addCafeteriaPayment = async (schoolId: string, paymentData: Omit<CafeteriaPayment, 'id' | 'paymentDate' | 'amount'>) => {
+        await modifySchool(schoolId, school => {
             const amount = paymentData.dates.length * school.cafeteriaDailyFee;
             const newPayment: CafeteriaPayment = { ...paymentData, amount, id: generateId(), paymentDate: new Date().toISOString() };
             return { ...school, cafeteriaPayments: [...school.cafeteriaPayments, newPayment] };
         });
     };
 
-    const updateSchedule = (schoolId: string, sessions: ScheduledSession[]) => {
-        modifySchool(schoolId, s => ({ ...s, scheduledSessions: sessions }));
+    const updateSchedule = async (schoolId: string, sessions: ScheduledSession[]) => {
+        await modifySchool(schoolId, s => ({ ...s, scheduledSessions: sessions }));
     };
     
-    const recordAttendance = (schoolId: string, records: Omit<Attendance, 'id'>[]) => {
-        modifySchool(schoolId, school => {
+    const recordAttendance = async (schoolId: string, records: Omit<Attendance, 'id'>[]) => {
+        await modifySchool(schoolId, school => {
             const newAttendance = [...school.attendance];
             records.forEach(record => {
-                const existingIndex = newAttendance.findIndex(
-                    att => att.studentId === record.studentId && att.sessionId === record.sessionId && att.date === record.date
-                );
+                const existingIndex = newAttendance.findIndex(att => att.studentId === record.studentId && att.sessionId === record.sessionId && att.date === record.date);
                 if (existingIndex > -1) {
                     newAttendance[existingIndex] = { ...newAttendance[existingIndex], status: record.status };
                 } else {
@@ -434,18 +450,17 @@ const AppLogic: React.FC = () => {
         });
     };
     
-    const recordCafeteriaUsage = (schoolId: string, studentIds: string[], date: string) => {
-        modifySchool(schoolId, school => {
+    const recordCafeteriaUsage = async (schoolId: string, studentIds: string[], date: string) => {
+        await modifySchool(schoolId, school => {
             const otherDaysUsage = school.cafeteriaUsage.filter(usage => usage.date !== date);
-            const newUsageForDate: CafeteriaUsage[] = studentIds.map(studentId => ({
-                studentId,
-                date,
-            }));
+            const newUsageForDate: CafeteriaUsage[] = studentIds.map(studentId => ({ studentId, date }));
             return { ...school, cafeteriaUsage: [...otherDaysUsage, ...newUsageForDate] };
         });
     };
 
-    const restoreData = (data: { schools: School[] }) => {
+    const restoreData = async (data: { schools: School[] }) => {
+        await db.clearSchools();
+        await db.bulkPutSchools(data.schools);
         setSchools(data.schools);
     };
 
@@ -463,6 +478,10 @@ const AppLogic: React.FC = () => {
         addExpense, addPayment, addCafeteriaPayment, updateSchedule,
         recordAttendance, recordCafeteriaUsage, restoreData,
     };
+    
+    if (isLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><div className="text-xl font-semibold">Loading...</div></div>;
+    }
 
     return (
         <AppContext.Provider value={contextValue}>

@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useMemo, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAppContext } from '../hooks/useAppContext.ts';
@@ -40,28 +39,28 @@ const Settings: React.FC = () => {
         }
     };
     
-    const handleInfoSubmit = (e: React.FormEvent) => {
+    const handleInfoSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId && schoolName && schoolLogo) {
-            updateSchoolDetails(currentUser.schoolId, { name: schoolName, logo: schoolLogo });
+            await updateSchoolDetails(currentUser.schoolId, { name: schoolName, logo: schoolLogo });
             showToast(t('infoUpdatedSuccess'), 'success');
         } else {
             showToast(t('fillAllFields'), 'error');
         }
     }
     
-    const handleCodesSubmit = (e: React.FormEvent) => {
+    const handleCodesSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId && ownerCode && staffCode) {
-            updateSchoolCodes(currentUser.schoolId, { ownerCode, staffCode });
+            await updateSchoolCodes(currentUser.schoolId, { ownerCode, staffCode });
             showToast(t('codesUpdatedSuccess'), 'success');
         }
     }
 
-    const handleFeesSubmit = (e: React.FormEvent) => {
+    const handleFeesSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId) {
-            updateSchoolFees(currentUser.schoolId, fees);
+            await updateSchoolFees(currentUser.schoolId, fees);
             showToast(t('infoUpdatedSuccess'), 'success');
         }
     };
@@ -88,7 +87,7 @@ const Settings: React.FC = () => {
 
         if (window.confirm(t('importConfirm'))) {
             const reader = new FileReader();
-            reader.onload = (event) => {
+            reader.onload = async (event) => {
                 try {
                     const text = event.target?.result;
                     if (typeof text !== 'string') {
@@ -96,7 +95,7 @@ const Settings: React.FC = () => {
                     }
                     const data = JSON.parse(text);
                     if (data && Array.isArray(data.schools)) {
-                        restoreData(data);
+                        await restoreData(data);
                         showToast(t('importSuccess'), 'success');
                         // Optionally force a reload to ensure all components refresh with new data
                         window.location.reload();

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.ts';
 import { useLanguage } from '../../hooks/useLanguage.ts';
@@ -51,7 +52,7 @@ const Students: React.FC = () => {
         setEditingStudent(null);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser?.schoolId) return;
 
@@ -69,18 +70,18 @@ const Students: React.FC = () => {
 
 
         if (editingStudent) {
-            updateStudent(currentUser.schoolId, { ...editingStudent, ...studentData });
+            await updateStudent(currentUser.schoolId, { ...editingStudent, ...studentData });
             showToast(t('editSuccess'), 'success');
         } else {
-            addStudent(currentUser.schoolId, studentData);
+            await addStudent(currentUser.schoolId, studentData);
             showToast(t('addSuccess'), 'success');
         }
         handleCloseModal();
     };
     
-    const handleDelete = (studentId: string) => {
+    const handleDelete = async (studentId: string) => {
         if(window.confirm(t('confirmDelete')) && currentUser?.schoolId) {
-            deleteStudent(currentUser.schoolId, studentId);
+            await deleteStudent(currentUser.schoolId, studentId);
             showToast(t('deleteSuccess'), 'info');
         }
     }
@@ -126,11 +127,11 @@ const Students: React.FC = () => {
         }));
     };
 
-    const handlePaymentSubmit = (e: React.FormEvent) => {
+    const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser?.schoolId || !selectedStudentForPayment) return;
         
-        addPayment(currentUser.schoolId, {
+        await addPayment(currentUser.schoolId, {
             studentId: selectedStudentForPayment.id,
             amount: paymentData.amount,
             date: paymentData.date,
@@ -153,9 +154,9 @@ const Students: React.FC = () => {
         setSelectedStudentForCafeteria(null);
     };
 
-    const handleCafeteriaSubmit = () => {
+    const handleCafeteriaSubmit = async () => {
         if (!currentUser?.schoolId || !selectedStudentForCafeteria || selectedDates.size === 0) return;
-        addCafeteriaPayment(currentUser.schoolId, {
+        await addCafeteriaPayment(currentUser.schoolId, {
             studentId: selectedStudentForCafeteria.id,
             dates: Array.from(selectedDates),
         });

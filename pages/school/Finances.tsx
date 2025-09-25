@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAppContext } from '../../hooks/useAppContext.ts';
@@ -93,11 +91,11 @@ const Finances: React.FC = () => {
     }, [school, t]);
 
 
-    const handleAddExpense = (e: React.FormEvent) => {
+    const handleAddExpense = async (e: React.FormEvent) => {
         e.preventDefault();
         if (currentUser?.schoolId && expenseData.description && expenseData.amount > 0) {
             const date = new Date().toISOString().slice(0, 10);
-            addExpense(currentUser.schoolId, { ...expenseData, date });
+            await addExpense(currentUser.schoolId, { ...expenseData, date });
             setExpenseData({ description: '', amount: 0, category: 'other' });
             setIsModalOpen(false);
             showToast(t('addSuccess'), 'success');

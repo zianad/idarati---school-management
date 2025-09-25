@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext.ts';
 import { useLanguage } from '../hooks/useLanguage.ts';
@@ -60,9 +61,9 @@ const CafeteriaPage: React.FC = () => {
         setIsDirty(true);
     };
     
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!school) return;
-        recordCafeteriaUsage(school.id, Array.from(checkedStudentIds), selectedDate);
+        await recordCafeteriaUsage(school.id, Array.from(checkedStudentIds), selectedDate);
         setIsDirty(false);
         showToast(t('usageSavedSuccess'), 'success');
     };

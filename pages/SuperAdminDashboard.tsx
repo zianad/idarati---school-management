@@ -51,10 +51,10 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
-    const handleAddSchool = (e: React.FormEvent) => {
+    const handleAddSchool = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newSchoolName.trim() && newSchoolLogo && newOwnerCode.trim() && newStaffCode.trim()) {
-            addSchool({
+            await addSchool({
                 name: newSchoolName.trim(),
                 logo: newSchoolLogo,
                 ownerCode: newOwnerCode.trim(),
@@ -68,21 +68,21 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
-    const handleDeleteSchool = (schoolId: string) => {
+    const handleDeleteSchool = async (schoolId: string) => {
         if (window.confirm(t('confirmDelete'))) {
-            deleteSchool(schoolId);
+            await deleteSchool(schoolId);
             showToast(t('deleteSuccess'), 'info');
         }
     };
     
-    const handleToggleSchool = (schoolId: string) => {
-        toggleSchoolStatus(schoolId);
+    const handleToggleSchool = async (schoolId: string) => {
+        await toggleSchoolStatus(schoolId);
         showToast(t('statusUpdatedSuccess'), 'success');
     };
 
-    const handleActivatePermanently = (schoolId: string) => {
+    const handleActivatePermanently = async (schoolId: string) => {
         if (window.confirm(t('confirmPermanentActivation'))) {
-            activateSchoolPermanently(schoolId);
+            await activateSchoolPermanently(schoolId);
             showToast(t('activationSuccess'), 'success');
         }
     };
